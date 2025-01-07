@@ -1,0 +1,423 @@
+clear all; clc; close all;
+
+%Credit: Dr. Hanchel Cho ; Embry Riddle Aeronautical University course AE313
+%Code by Aidhan Corbett
+
+%NOTES on what to do next...
+%1. make plotting neptune system nonlinear between points
+%2. plot transfers
+%3. find deltaVs
+
+simtime = 448/365.25; %years
+EtoJtransfertime = 448/365.25; %years
+
+tspan = [0 31557600*simtime]; %timespan of Earth orbit around Sun
+tspanj = [0 31557600*simtime*12]; %timespan of Jupiter orbit around Sun
+tspann = [0 31557600*simtime*167.2]; %timespan of Neptune orbit around Sun
+tspant = [0 507600*simtime]; %timespan of Triton orbit around Neptune
+tspanc = [0 31557600*EtoJtransfertime];
+
+% SUN initial conditions
+s0 = zeros(1,6); %all measurements default to sun centered frame
+mS = 1.989e30; %kg
+muSun = 1.327e20;
+
+% EARTH initial conditions
+e0 = [-1.329e8;6.570e7;6.582e3;-1.368e1;-2.682e1;2.119e-3]*1e3; % [x0;y0;z0;xdot0;ydot0;zdot0] (m, m/s)
+mE = 5.97e24; %kg
+
+% JUPITER initial conditions
+j0 = [-2.104e8;-7.670e8;7.902e6;1.245e1;-2.846e0;-2.667e-1]*1e3; % [x0;y0;z0;xdot0;ydot0;zdot0] (m, m/s)
+mJ = 1898e24; %kg
+
+% NEPTUNE initial conditions
+n0 = [4.360e9;9.570e8;-1.202e8;-1.201e0;5.341e0;-8.233e-2]*1e3; % [x0;y0;z0;xdot0;ydot0;zdot0] (m, m/s)
+mN = 102e24; %kg
+
+% TRITON initial conditions
+%4.452e9;-4.235e8;-9.416e7
+t0 = [-6.123e4;-2.857e5;-2.011e5;-3.616e0; -8.665e-1; 2.332e0]*1e3; % [x0;y0;z0;xdot0;ydot0;zdot0] (m, m/s)
+mT = 2.139e22; %kg
+muNeptune = 6.837e15;
+
+% SPACECRAFT initial conditions
+c0 = [-1.329e8;6.570e7;6.582e3;-2.22e1;-3.47e1;0.8e-1]*1e3;
+%c0 = [-1.329e8;6.570e7;6.582e3;-2.22e1;-3.47e1;0.9e-1]*1e3;
+
+
+eoptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+joptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+noptions = odeset('RelTol',1e-8); % relative error tolerance = 1e-6
+toptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+coptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+
+[t1,f] = ode45(@(t1,f) orbit_propogate(t1,f,muSun), tspan, e0, eoptions);
+[t2,g] = ode45(@(t2,g) orbit_propogate(t2,g,muSun), tspanj, j0, joptions);
+[t3,h] = ode45(@(t3,h) orbit_propogate(t3,h,muSun), tspann, n0, noptions);
+[t4,i] = ode45(@(t4,i) orbit_propogate(t4,i,muNeptune), tspant, t0, toptions);
+[t5,j] = ode45(@(t5,j) orbit_propogate(t5,j,muSun), tspanc, c0, coptions);
+
+%Earth Data --------------------------------------
+x = f(:,1);  % 1st column of f is time history of x
+y = f(:,2);  % 2nd column of f is time history of y
+z = f(:,3);  % 3rd column of f is time history of z
+
+x_dot = f(:,4); % 4th column of f is time history of x dot
+y_dot = f(:,5); % 5th column of f is time history of y dot
+z_dot = f(:,6); % 6th column of f is time history of z dot
+
+r_Final_Earth = [x(end);y(end);z(end)]               % final position
+v_Final_Earth = [x_dot(end);y_dot(end);z_dot(end)];   % final velocity
+
+%Jupiter Data --------------------------------------
+xj = g(:,1);  % 1st column of f is time history of x
+yj = g(:,2);  % 2nd column of f is time history of y
+zj = g(:,3);  % 3rd column of f is time history of z
+
+xj_dot = g(:,4); % 4th column of f is time history of x dot
+yj_dot = g(:,5); % 5th column of f is time history of y dot
+zj_dot = g(:,6); % 6th column of f is time history of z dot
+
+r_Final_Jupiter = [xj(end);yj(end);zj(end)]               % final position
+v_Final_Jupiter = [xj_dot(end);yj_dot(end);zj_dot(end)];   % final velocity
+
+%Neptune Data --------------------------------------
+xn = h(:,1);  % 1st column of f is time history of x
+yn = h(:,2);  % 2nd column of f is time history of y
+zn = h(:,3);  % 3rd column of f is time history of z
+
+xn_dot = h(:,4); % 4th column of f is time history of x dot
+yn_dot = h(:,5); % 5th column of f is time history of y dot
+zn_dot = h(:,6); % 6th column of f is time history of z dot
+
+r_Final_Neptune = [xn(end);yn(end);zn(end)]               % final position
+v_Final_Neptune = [xn_dot(end);yn_dot(end);zn_dot(end)];   % final velocity
+
+%Triton Data --------------------------------------
+xt = i(:,1);  % 1st column of f is time history of x
+yt = i(:,2);  % 2nd column of f is time history of y
+zt = i(:,3);  % 3rd column of f is time history of z
+
+xt_dot = i(:,4); % 4th column of f is time history of x dot
+yt_dot = i(:,5); % 5th column of f is time history of y dot
+zt_dot = i(:,6); % 6th column of f is time history of z dot
+
+r_Final_Triton = [xt(end);yt(end);zt(end)]               % final position
+v_Final_Triton = [xt_dot(end);yt_dot(end);zt_dot(end)];   % final velocity
+
+%Spacecraft Data --------------------------------------
+xc = j(:,1);  % 1st column of f is time history of x
+yc = j(:,2);  % 2nd column of f is time history of y
+zc = j(:,3);  % 3rd column of f is time history of z
+
+xc_dot = j(:,4); % 4th column of f is time history of x dot
+yc_dot = j(:,5); % 5th column of f is time history of y dot
+zc_dot = j(:,6); % 6th column of f is time history of z dot
+
+r_Final_Spacecraft = [xc(end);yc(end);zc(end)]               % final position
+v_Final_Spacecraft = [xc_dot(end);yc_dot(end);zc_dot(end)];   % final velocity
+
+%Input Transfer Mechanics---------------------------------------------
+ErSOI = e0(1:3)*(mE/mS)^(2/5); %radius of Earth Sphere of Influence
+JrSOI = j0(1:3)*(mJ/mS)^(2/5); %radius of Jupiter Sphere of Influence
+NrSOI = n0(1:3)*(mN/mS)^(2/5); %radius of Neptune Sphere of Influence
+
+Earth_at_time_0 = [-1.329e8;6.570e7;6.582e3];
+Jupiter_at_time_448 = [2.802e8, -7.190e8, -0.03274e8];
+Neptune_at_time_2576 = [3.936e9, 2.096e9, -1.339e8];
+Jupiter_velocity_at_time_448 = [1.202e1, 5.360e0, -2.912e-1];
+EJdist = Jupiter_at_time_448 - Earth_at_time_0;
+JNdist = Neptune_at_time_2576 - Jupiter_at_time_448;
+
+%Step 1: design heliocentric transfer to neptune with Jupiter gravity assist:
+at1 = (norm(e0(1:3))+norm(j0(1:3)))/2; %ellipse a for transfer 1 to jupiter
+v1 = sqrt(muSun*(2/norm(e0(1:3))-1/at1)); %necessary escape speed for transfer
+vE = norm(e0(4:6)); %speed of earth orbit
+deltaV1 = v1-vE; %FIRST DELTA V BURN
+TOF1 = pi*sqrt((at1^3)/muSun)/2; %Time of Flight to Jupiter (/2 bc only want half ellipse)
+
+
+
+
+%Step 2: hyperbolic departure from Earth parking orbit to transfer
+ErParking = 1;
+
+
+%---------------------------------------------------------------------
+for a = 1:length(x)
+    t = tiledlayout(1,2);
+    title(t,'Planetary Motion in Sun Centered Frame')
+    nexttile
+
+    b = round((a/12)*(length(xj)/length(x)))+1;
+    c = round((a/166)*(length(xn)/length(x)))+1;
+    if round(62.13*a) <= 165 && round(62.13*a)/165 <= 1
+        d = round(62.13*a);
+    elseif round(62.13*a) > 165 && round(62.13*a)/165 <= 1
+        d = round(62.13*a)-165;
+    elseif mod(round(62.13*a),165) == 0
+        d = 1;
+    else
+        d = mod(round(62.13*a),165);
+    end
+    e = round((simtime/EtoJtransfertime)*a*length(xc)/length(x))+1;
+    if e > length(xc)
+        e = length(xc);
+    end
+
+%     Plot Earth Orbit
+    plot3(x/1000,y/1000,z/1000);grid;
+    text(128339000,74681100,-2376,'\leftarrow Earth Orbit')
+    hold on
+    plot3(x(a)/1000,y(a)/1000,z(a)/1000,'O')
+    hold on
+
+%     Plot Spacecraft Orbit
+    plot3(xc/1000,yc/1000,zc/1000);grid;
+    hold on
+    plot3(xc(e)/1000,yc(e)/1000,zc(e)/1000,'D')
+    hold on
+
+%     Plot Jupiter Orbit
+    plot3(xj/1000,yj/1000,zj/1000);grid;
+    text(-34016700,768371000,-2431240,'\leftarrow Jupiter Orbit')
+    hold on
+    plot3(xj(b)/1000,yj(b)/1000,zj(b)/1000,'O')
+    hold on
+
+%     Plot Neptune Orbit
+    plot3(xn/1000,yn/1000,zn/1000);grid;
+    text(-707878000,4386440000,-65302600,'\leftarrow Neptune Orbit')
+    hold on
+    plot3(xn(c)/1000,yn(c)/1000,zn(c)/1000,'O')
+    hold on
+    view(45,45)
+    xlabel('x, km');ylabel('y, km');zlabel('z, km');
+    title('Orbit of Earth, Jupiter, & Neptune around Sun');
+    str = sprintf('%d Days\t\t',round(a*simtime*365.25/length(x)));
+    if a*simtime*365.25/length(x) > 365
+        str = sprintf('%d Days; %.0f Years\t\t',round(a*simtime*365.25/length(x)),floor((a*simtime*365.25/length(x))/365.25));
+    end
+
+    subtitle(str)
+    
+
+    hold off
+    %--------------------------------------------------------------
+    nexttile %Plotting Triton - Neptune Orbit
+
+%          Plot Neptune Orbit
+       plot3(xn(1:408)/1000,yn(1:408)/1000,zn(1:408)/1000);grid;
+       text(4453260000,-421771000+0.005e7,-93956100+0.0005e7,'\leftarrow Neptune Orbit')
+          hold on
+%          Plot Triton Orbit
+        plot3((xt+((xn(round(2*simtime))-xn(1))*(a/(round(149*simtime)))+xn(1)))/1000,(yt+((yn(round(2*simtime))-yn(1))*(a/(round(149*simtime)))+yn(1)))/1000,(zt+((zn(round(2*simtime))-zn(1))*(a/(round(149*simtime)))+zn(1)))/1000);grid; %plot orbit
+          hold on
+%          Plot Neptune Body
+        plot3((((xn(round(2*simtime))-xn(1))*(a/(round(149*simtime)))+xn(1)))/1000,(((yn(round(2*simtime))-yn(1))*(a/(round(149*simtime)))+yn(1)))/1000,(((zn(round(2*simtime))-zn(1))*(a/(round(149*simtime)))+zn(1)))/1000,'O');grid;
+        text((((xn(round(2*simtime))-xn(1))*(a/(round(149*simtime)))+xn(1)))/1000,(((yn(round(2*simtime))-yn(1))*(a/(round(149*simtime)))+yn(1)))/1000+0.005e7,(((zn(round(2*simtime))-zn(1))*(a/(round(149*simtime)))+zn(1)))/1000+0.0005e7,'\leftarrow Neptune')
+        hold on
+%          Plot Triton Body
+       plot3((xt(d)+((xn(round(2*simtime))-xn(1))*(a/(round(149*simtime)))+xn(1)))/1000,(yt(d)+((yn(round(2*simtime))-yn(1))*(a/(round(149*simtime)))+yn(1)))/1000,(zt(d)+((zn(round(2*simtime))-zn(1))*(a/(round(149*simtime)))+zn(1)))/1000,'O');grid;
+
+        view(88,45) %View the graph at these specific angles
+%          View parameters: only Triton and Neptune:-----
+        xlim([4.345e9 4.365e9])
+        ylim([9.52e8 9.7e8])
+        zlim([-1.23e8 -1.14e8])
+%         xlim([xn(408) xn(4*simtime)])
+%           [4.458e+12 
+%         ylim([yn(408) yn(4*simtime)])
+%         zlim([zn(4*simtime) zn(408)])
+                 hold off
+%         ----------------------------------
+
+
+%       Label Graph
+        xlabel('x, km');ylabel('y, km');zlabel('z, km');
+        title('Orbit of Triton around Neptune');
+%         str = sprintf('%d Days\t\t%d Years',round(a*2.4497));
+        subtitle(str)
+        pause(0.001/simtime) %Wait as not to overload MATLAB
+%      end %end statement for triton and neptune e loop
+
+end
+
+%Now, Jupiter transfer -----------------------------------------
+
+simtimeJt = 100/365.25; %years
+Jtransfertime = 100/365.25; %years
+
+Jttspan = [0 31557600*simtimeJt]; %timespan of Earth orbit around Sun
+Jttspanj = [0 31557600*simtimeJt*12]; %timespan of Jupiter orbit around Sun
+Jttspann = [0 31557600*simtimeJt*167.2]; %timespan of Neptune orbit around Sun
+Jttspant = [0 507600*simtimeJt]; %timespan of Triton orbit around Neptune
+Jttspanc = [0 31557600*Jtransfertime];
+
+% SUN initial conditions
+Js0 = zeros(1,6); %all measurements default to sun centered frame
+JmS = 1.989e30; %kg
+JmuSun = 1.327e20;
+
+% EARTH initial conditions
+Je0 = [x(a),y(a),z(a),x_dot(a),y_dot(a),z_dot(a)]; % [x0;y0;z0;xdot0;ydot0;zdot0] (m, m/s)
+JmE = 5.97e24; %kg
+
+% JUPITER initial conditions
+Jj0 = [xj(b),yj(b),zj(b),xj_dot(b),yj_dot(b),zj_dot(b)]; % [x0;y0;z0;xdot0;ydot0;zdot0] (m, m/s)
+JmJ = 1898e24; %kg
+JmuJ = 1.267e17;
+
+% NEPTUNE initial conditions
+Jn0 = [xn(c),yn(c),zn(c),xn_dot(c),yn_dot(c),zn_dot(c)]; % [x0;y0;z0;xdot0;ydot0;zdot0] (m, m/s)
+JmN = 102e24; %kg
+
+
+% SPACECRAFT initial conditions
+Jc0 = [r_Final_Spacecraft, v_Final_Spacecraft];
+
+
+Jteoptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+Jtjoptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+Jtnoptions = odeset('RelTol',1e-8); % relative error tolerance = 1e-6
+Jttoptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+Jtcoptions = odeset('RelTol',1e-6); % relative error tolerance = 1e-6
+
+[Jt1,k] = ode45(@(Jt1,k) orbit_propogate(Jt1,k,JmuSun), Jttspan, Je0, Jteoptions);
+[Jt2,l] = ode45(@(Jt2,l) orbit_propogate(Jt2,l,JmuSun), Jttspanj, Jj0, Jtjoptions);
+[Jt3,m] = ode45(@(Jt3,m) orbit_propogate(Jt3,m,JmuSun), Jttspann, Jn0, Jtnoptions);
+[Jt5,o] = ode45(@(Jt5,o) orbit_propogate(Jt5,o,JmuJ), Jttspanc, Jc0, Jtcoptions);
+
+%Earth Data --------------------------------------
+Jx = k(:,1);  % 1st column of f is time history of x
+Jy = k(:,2);  % 2nd column of f is time history of y
+Jz = k(:,3);  % 3rd column of f is time history of z
+
+Jx_dot = k(:,4); % 4th column of f is time history of x dot
+Jy_dot = k(:,5); % 5th column of f is time history of y dot
+Jz_dot = k(:,6); % 6th column of f is time history of z dot
+
+Jr_Final_Earth = [Jx(end);Jy(end);Jz(end)]               % final position
+Jv_Final_Earth = [Jx_dot(end);Jy_dot(end);Jz_dot(end)];   % final velocity
+
+%Jupiter Data --------------------------------------
+Jxj = l(:,1);  % 1st column of f is time history of x
+Jyj = l(:,2);  % 2nd column of f is time history of y
+Jzj = l(:,3);  % 3rd column of f is time history of z
+
+Jxj_dot = l(:,4); % 4th column of f is time history of x dot
+Jyj_dot = l(:,5); % 5th column of f is time history of y dot
+Jzj_dot = l(:,6); % 6th column of f is time history of z dot
+
+Jr_Final_Jupiter = [Jxj(end);Jyj(end);Jzj(end)]               % final position
+Jv_Final_Jupiter = [Jxj_dot(end);Jyj_dot(end);Jzj_dot(end)];   % final velocity
+
+%Neptune Data --------------------------------------
+Jxn = m(:,1);  % 1st column of f is time history of x
+Jyn = m(:,2);  % 2nd column of f is time history of y
+Jzn = m(:,3);  % 3rd column of f is time history of z
+
+Jxn_dot = m(:,4); % 4th column of f is time history of x dot
+Jyn_dot = m(:,5); % 5th column of f is time history of y dot
+Jzn_dot = m(:,6); % 6th column of f is time history of z dot
+
+Jr_Final_Neptune = [Jxn(end);Jyn(end);Jzn(end)]               % final position
+Jv_Final_Neptune = [Jxn_dot(end);Jyn_dot(end);Jzn_dot(end)];   % final velocity
+
+
+%Spacecraft Data --------------------------------------
+Jxc = o(:,1);  % 1st column of f is time history of x
+Jyc = o(:,2);  % 2nd column of f is time history of y
+Jzc = o(:,3);  % 3rd column of f is time history of z
+
+Jxc_dot = o(:,4); % 4th column of f is time history of x dot
+Jyc_dot = o(:,5); % 5th column of f is time history of y dot
+Jzc_dot = o(:,6); % 6th column of f is time history of z dot
+
+Jr_Final_Spacecraft = [Jxc(end);Jyc(end);Jzc(end)]               % final position
+Jv_Final_Spacecraft = [Jxc_dot(end);Jyc_dot(end);Jzc_dot(end)];   % final velocity
+
+pause(0.5);
+
+for Ja = 1:length(Jx)
+    tl = tiledlayout(1,2);
+    title(tl,'Planetary Motion in Sun Centered Frame')
+    nexttile
+
+    Jb = round((length(Jxj)/length(Jx)));
+    Jc = round((length(Jxn)/length(Jx)));
+    Jd = 0; %constant for plotting triton body motion
+    Je = round((simtimeJt/Jtransfertime)*Ja*length(Jxc)/length(Jx))+1;
+    if Je > length(Jxc)
+        Je = length(Jxc);
+    end
+
+%     Plot Earth Orbit
+    plot3(x/1000,y/1000,z/1000);grid;
+    text(128339000,74681100,-2376,'\leftarrow Earth Orbit')
+    hold on
+    plot3(Jx(Ja)/1000,Jy(Ja)/1000,Jz(Ja)/1000,'O')
+    hold on
+
+%     Plot Spacecraft Orbit
+    plot3(xc/1000,yc/1000,zc/1000);grid;
+    plot3(Jxc/1000,Jyc/1000,Jzc/1000);grid;
+    hold on
+    plot3(Jxc(Je)/1000,Jyc(Je)/1000,Jzc(Je)/1000,'D')
+    hold on
+
+%     Plot Jupiter Orbit
+    plot3(xj/1000,yj/1000,zj/1000);grid;
+    text(-34016700,768371000,-2431240,'\leftarrow Jupiter Orbit')
+    hold on
+    plot3(Jxj(Jb)/1000,Jyj(Jb)/1000,Jzj(Jb)/1000,'O')
+    hold on
+
+%     Plot Neptune Orbit
+    plot3(xn/1000,yn/1000,zn/1000);grid;
+    text(-707878000,4386440000,-65302600,'\leftarrow Neptune Orbit')
+    hold on
+    plot3(Jxn(Jc)/1000,Jyn(Jc)/1000,Jzn(Jc)/1000,'O')
+    hold on
+    view(45,45)
+    xlabel('x, km');ylabel('y, km');zlabel('z, km');
+    title('Orbit of Earth, Jupiter, & Neptune around Sun');
+    str = sprintf('%d Days\t\t',round(a*simtime*365.25/length(x)+Ja*simtimeJt*365.25/length(Jx)));
+    if (a*simtime*365.25/length(x)+Ja*simtimeJt*365.25/length(Jx)) > 365
+        str = sprintf('%d Days; %.0f Years\t\t',round(a*simtime*365.25/length(x)+Ja*simtimeJt*365.25/length(Jx)),floor((a*simtime*365.25/length(x)+Ja*simtimeJt*365.25/length(Jx))/365.25));
+    end
+
+    subtitle(str)
+    
+
+    hold off
+
+    nexttile %Plotting Triton - Neptune Orbit
+
+%          Plot Neptune Orbit
+       plot3(xn(1:408)/1000,yn(1:408)/1000,zn(1:408)/1000);grid;
+       text(4453260000,-421771000+0.005e7,-93956100+0.0005e7,'\leftarrow Neptune Orbit')
+          hold on
+        view(88,45) %View the graph at these specific angles
+%          View parameters: only Triton and Neptune:-----
+        xlim([4.345e9 4.365e9])
+        ylim([9.52e8 9.7e8])
+        zlim([-1.23e8 -1.14e8])
+        hold off
+end
+
+%---------------------------------------------------------------
+function dfdt = orbit_propogate(t,f,mu)
+
+%     mu = 1.327e20;      % gravitational parameter of Sun (m^3/s^2)
+
+    dfdt = zeros(6,1);  % initialize output (6 by 1 vector)
+
+    dfdt(1) = f(4);  % xdot
+    dfdt(2) = f(5);  % ydot
+    dfdt(3) = f(6);  % zdot
+    dfdt(4) = -mu/(f(1)^2+f(2)^2+f(3)^2)^(3/2)*f(1);  % xddot
+    dfdt(5) = -mu/(f(1)^2+f(2)^2+f(3)^2)^(3/2)*f(2);  % yddot
+    dfdt(6) = -mu/(f(1)^2+f(2)^2+f(3)^2)^(3/2)*f(3);  % zddot
+
+end
